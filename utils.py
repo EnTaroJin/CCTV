@@ -176,7 +176,7 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264
 
     cap.release()
     # cv2.destroyAllWindows()
-def delete_old_folders(base_folder, days_to_keep=1):
+def delete_old_folders(base_folder, days_to_keep=3):
     current_date = datetime.datetime.now()
     threshold_date = current_date - datetime.timedelta(days=days_to_keep)
     
