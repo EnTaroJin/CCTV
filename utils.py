@@ -19,6 +19,23 @@ camera_number = 1
 # 비디오 저장 중지 신호를 위한 플래그
 stop_flag = False
 
+def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 설정
+    if os.path.exists("processed_files.txt"):
+        current_time = time.time()
+        with open("processed_files.txt", "r") as f:
+            lines = f.readlines()
+        
+        with open("processed_files.txt", "w") as f:
+            for line in lines:
+                # 파일 이름과 날짜를 추출하여 비교
+                file_name, date_str = line.strip().split(",")  # 예: file.mp4,20230101
+                file_date = datetime.datetime.strptime(date_str, "%Y%m%d").timestamp()
+                if (current_time - file_date) <= (max_age_days * 86400):  # 86400초 = 1일
+                    f.write(line)
+
+# 프로그램 시작 시 호출
+clean_processed_files()
+
 def reconnect(cap, url):
     cap.release()
     cap = cv2.VideoCapture(url)
@@ -189,20 +206,44 @@ def delete_old_folders(base_folder, days_to_keep=3):
                 shutil.rmtree(folder_path)
                 empty_trash()  # 휴지통 비우기
     
+def record_processed_file(file_name):
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    absolute_path = os.path.abspath(file_name)  # 절대 경로로 변환
+    with open("processed_files.txt", "a") as f:
+        f.write(f"{absolute_path},{current_date}\n")  # 날짜도 함께 기록
+
+
+def load_processed_files():
+    processed_files = set()
+    try:
+        with open("processed_files.txt", "r") as f:
+            for line in f:
+                # 절대 경로로 변환하여 저장
+                file_name = line.strip().split(",")[0]  # 파일 이름만 추출
+                processed_files.add(os.path.abspath(file_name))  # 절대 경로로 변환하여 저장
+    except FileNotFoundError:
+        pass
+    return processed_files
 
 def process_videos_in_folder(folder_path, model, counter, classes_to_count):
     global processed_files
     processed_all = True
+
+    # 이미 처리된 파일 목록 로드
+    processed_files = load_processed_files()
     
     video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
     video_files.sort(key=lambda x: os.path.splitext(os.path.basename(x))[0])  # 파일 이름 기준 정렬
 
     for video_file in video_files:
-        if video_file in processed_files:
+        if os.path.abspath(video_file) in processed_files:  # 절대 경로로 비교
             continue  # 이미 처리된 파일은 건너뜁니다
         print(f"Processing video file: {video_file}")  # 파일 이름을 출력하여 확인
-        process_video(video_file, model, counter, classes_to_count)
-        processed_files.add(video_file)  # 처리된 파일 기록
+        try:
+            process_video(video_file, model, counter, classes_to_count)
+            record_processed_file(video_file)  # 처리된 파일 기록
+        except Exception as e:
+            print(f"비디오 처리 중 오류 발생: {e}")
         processed_all = False  # 아직 처리할 파일이 남아 있음
     
     return processed_all  # 모든 파일을 처리했는지 여부를 반환
