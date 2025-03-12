@@ -23,5 +23,3 @@ def file_upload( unitid, file_path ):
 
     # 파일 닫기
     files['file'].close()
-
-

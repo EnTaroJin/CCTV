@@ -7,6 +7,7 @@ import torch
 import utils
 import gc
 
+
 def run_camera_task(camera_number, url, base_output_folder):
      # GPU가 사용 가능한지 확인
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,6 +33,7 @@ def run_camera_task(camera_number, url, base_output_folder):
 
     video_save_thread = None
 
+
     def start_video_save_thread():
         nonlocal video_save_thread
         utils.stop_flag = False  # 중지 플래그 초기화
@@ -40,12 +42,14 @@ def run_camera_task(camera_number, url, base_output_folder):
             video_save_thread.start()
             print(f"Video save thread started for camera {camera_number}")
 
+
     def stop_video_save_thread():
         print("Stopping video save thread...")  # 로그 추가
         utils.stop_saving_video()
         if video_save_thread is not None and video_save_thread.is_alive():
             video_save_thread.join()
             print(f"Video save thread stopped for camera {camera_number}")
+
 
     def job_scheduler():
         schedule.every().day.at("05:00").do(start_video_save_thread) # 05:00에 비디오 저장 시작
@@ -55,6 +59,7 @@ def run_camera_task(camera_number, url, base_output_folder):
         while True:
             schedule.run_pending()
             time.sleep(1)
+
 
     # 현재 시간 확인 후, 실행 시간 내에 있다면 비디오 저장 쓰레드 시작
     now = datetime.now().time()

@@ -3,16 +3,19 @@ import time
 import psutil
 from YOLOv8_Counting import run_camera_task  # YOLOv8_Counting에서 함수 임포트
 
+
 def set_cpu_affinity(process, core_ids):
     p = psutil.Process(process.pid)
     p.cpu_affinity(core_ids)
     print(f"프로세스 {process.pid}가 CPU 코어 {core_ids}에 할당되었습니다.")
+
 
 def start_camera_process(camera_number, url, base_output_folder, core_ids):
     process = multiprocessing.Process(target=run_camera_task, args=(camera_number, url, base_output_folder))
     process.start()
     #set_cpu_affinity(process, core_ids)
     return process
+
 
 if __name__ == "__main__":
     # 카메라 1 설정

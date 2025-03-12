@@ -10,7 +10,6 @@ import subprocess
 import server_api
 
 
-
 tracked_objects = set()  # 추적된 객체를 저장하기 위한 집합
 tracked_objects.add(None) 
 processed_files = set()  # 이미 처리된 파일을 기록할 집합
@@ -18,6 +17,7 @@ camera_number = 1
 
 # 비디오 저장 중지 신호를 위한 플래그
 stop_flag = False
+
 
 def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 설정
     if os.path.exists("processed_files.txt"):
@@ -36,10 +36,12 @@ def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 �
 # 프로그램 시작 시 호출
 clean_processed_files()
 
+
 def reconnect(cap, url):
     cap.release()
     cap = cv2.VideoCapture(url)
     return cap
+
 
 def zoom_in(image, zoom_factor=1.0):
     if zoom_factor <= 1.0:
@@ -57,6 +59,7 @@ def zoom_in(image, zoom_factor=1.0):
     zoomed_image = cv2.resize(cropped_image, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
     return zoomed_image
 
+
 def preprocess_image(image):
         # 히스토그램 평활화
     yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
@@ -70,6 +73,7 @@ def preprocess_image(image):
     image = cv2.LUT(image, table)
     
     return image
+
 
 def empty_trash():
     if platform.system() == "Windows":
@@ -106,6 +110,7 @@ def save_capture(image, obj_type, direction, previous_count, current_count, mode
         cv2.imwrite(image_name, result_image)
         print(f"캡처 저장: {image_name}")
 
+
 def save_capture2(image, obj_type, model, counter, classes_to_count):
         global camera_number
         
@@ -135,7 +140,6 @@ def save_capture2(image, obj_type, model, counter, classes_to_count):
 def stop_saving_video():
     global stop_flag
     stop_flag = True
-
 
 
 def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264', zoom_factor=1.0, c_number=2):
@@ -192,7 +196,8 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264
             break
 
     cap.release()
-    # cv2.destroyAllWindows()
+
+
 def delete_old_folders(base_folder, days_to_keep=3):
     current_date = datetime.datetime.now()
     threshold_date = current_date - datetime.timedelta(days=days_to_keep)
@@ -206,6 +211,7 @@ def delete_old_folders(base_folder, days_to_keep=3):
                 shutil.rmtree(folder_path)
                 empty_trash()  # 휴지통 비우기
     
+
 def record_processed_file(file_name):
     current_date = datetime.datetime.now().strftime("%Y%m%d")
     absolute_path = os.path.abspath(file_name)  # 절대 경로로 변환
@@ -224,6 +230,7 @@ def load_processed_files():
     except FileNotFoundError:
         pass
     return processed_files
+
 
 def process_videos_in_folder(folder_path, model, counter, classes_to_count):
     global processed_files
@@ -247,6 +254,7 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count):
         processed_all = False  # 아직 처리할 파일이 남아 있음
     
     return processed_all  # 모든 파일을 처리했는지 여부를 반환
+
 
 def process_video_files(base_folder, model, counter, classes_to_count):
     while True:
