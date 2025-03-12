@@ -289,7 +289,7 @@ def process_video_files(base_folder, model, counter, classes_to_count):
 
 def process_video(video_file, model, counter, classes_to_count, retry_delay=10, max_retries=90):
     retries = 0
-    global tracked_objects
+    global tracked_objects # 전역 변수 사용
     global camera_number
 
     while retries < max_retries:
@@ -301,7 +301,7 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                 time.sleep(retry_delay)
                 continue
 
-            frame_skip = 2
+            frame_skip = 2 # 프레임 스킵 최적화
             frame_counter = 0
 
             while cap.isOpened():
@@ -329,9 +329,9 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                                     save_capture2(im0, obj_type, model, counter, classes_to_count)
                                     tracked_objects.add(obj_id)
 
-                        display_size = (800, 600)
+                        display_size = (800, 600) # 화면 크기 조절
                         resized_im0 = cv2.resize(im0, display_size)
-                        cv2.imshow(f'CCTV_0{camera_number}', resized_im0)
+                        cv2.imshow(f'CCTV_0{camera_number}', resized_im0) # 화면에 표시
 
                     frame_counter += 1
 
