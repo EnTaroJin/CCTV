@@ -289,7 +289,7 @@ def process_video_files(base_folder, model, counter, classes_to_count):
 
 def process_video(video_file, model, counter, classes_to_count, retry_delay=10, max_retries=90):
     retries = 0
-    global tracked_objects  # 전역 변수 사용
+    global tracked_objects
     global camera_number
 
     while retries < max_retries:
@@ -301,14 +301,14 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                 time.sleep(retry_delay)
                 continue
 
-            frame_skip = 2  # 프레임 스킵 최적화
+            frame_skip = 2
             frame_counter = 0
 
             while cap.isOpened():
                 success, im0 = cap.read()
                 if not success:
                     print("프레임을 읽는 데 실패했습니다.")
-                    break
+                    break  # 프레임을 읽지 못했을 경우 루프를 종료하고 다음 비디오로 넘어갑니다.
 
                 try:
                     # 이미지 전처리 적용
@@ -325,14 +325,12 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                             obj_id = int(box.id) if box.id is not None else None
                             if obj_id is not None:
                                 if cls_id in classes_to_count and obj_id not in tracked_objects:
-                                    print(f"{obj_type} 감지됨, ID: {obj_id}")  # 감지된 객체 출력
+                                    print(f"{obj_type} 감지됨, ID: {obj_id}")
                                     save_capture2(im0, obj_type, model, counter, classes_to_count)
-                                    tracked_objects.add(obj_id)  # 캡처된 객체 ID 저장
-                        display_size=(800, 600)
-                        # 화면 크기 조절
-                        resized_im0 = cv2.resize(im0, display_size)
+                                    tracked_objects.add(obj_id)
 
-                        # 화면에 표시
+                        display_size = (800, 600)
+                        resized_im0 = cv2.resize(im0, display_size)
                         cv2.imshow(f'CCTV_0{camera_number}', resized_im0)
 
                     frame_counter += 1
@@ -342,7 +340,7 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                         break
                 except Exception as e:
                     print(f"프레임 처리 중 오류 발생: {e}")
-                    break
+                    break  # 프레임 처리 중 오류가 발생하면 루프를 종료하고 다음 비디오로 넘어갑니다.
 
             cap.release()
             cv2.destroyAllWindows()
@@ -360,5 +358,26 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
     else:
         print(f"파일이 이미 삭제되었습니다: {video_file}")
 
-    # 다음 비디오 처리 로직 추가
     return
+
+def process_videos_in_folder(folder_path, model, counter, classes_to_count):
+    global processed_files
+    processed_all = True
+
+    processed_files = load_processed_files()
+    
+    video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
+    video_files.sort(key=lambda x: os.path.splitext(os.path.basename(x))[0])  # 파일 이름 기준 정렬
+
+    for video_file in video_files:
+        if os.path.abspath(video_file) in processed_files:
+            continue  # 이미 처리된 파일은 건너뜁니다
+        print(f"Processing video file: {video_file}")  # 파일 이름을 출력하여 확인
+        try:
+            process_video(video_file, model, counter, classes_to_count)
+            record_processed_file(video_file)  # 처리된 파일 기록
+        except Exception as e:
+            print(f"비디오 처리 중 오류 발생: {e}")
+        processed_all = False  # 아직 처리할 파일이 남아 있음
+    
+    return processed_all  # 모든 파일을 처리했는지 여부를 반환
