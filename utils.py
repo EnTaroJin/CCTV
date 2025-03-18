@@ -164,7 +164,7 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         video_filename = os.path.join(output_folder, f"video_{current_time_video}.mp4")
-        video_writer = cv2.VideoWriter(video_filename, fourcc, fps // frame_skip, (frame_width, frame_height))
+        video_writer = cv2.VideoWriter(video_filename, fourcc, fps, (frame_width, frame_height))  # FPS 수정
 
         start_time = time.time()
 
@@ -180,8 +180,8 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264
                 cap = reconnect(cap, url)
                 success, frame = cap.read()
                 if not success:
-                    print("재연결 실패. 5초 후 다시 시도합니다.")
-                    time.sleep(5)
+                    print("재연결 실패. 2초 후 다시 시도합니다.")
+                    time.sleep(2)
                     continue
 
             # frame = zoom_in(frame, zoom_factor)
