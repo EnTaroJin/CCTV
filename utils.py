@@ -27,11 +27,18 @@ def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 �
         
         with open("processed_files.txt", "w") as f:
             for line in lines:
-                # 파일 이름과 날짜를 추출하여 비교
-                file_name, date_str = line.strip().split(",")  # 예: file.mp4,20230101
-                file_date = datetime.datetime.strptime(date_str, "%Y%m%d").timestamp()
-                if (current_time - file_date) <= (max_age_days * 86400):  # 86400초 = 1일
-                    f.write(line)
+                line = line.strip()
+                if line:  # 빈 줄 확인
+                    try:
+                        # 파일 이름과 날짜를 추출하여 비교
+                        file_name, date_str = line.split(",")  # 예: file.mp4,20230101
+                        file_date = datetime.datetime.strptime(date_str, "%Y%m%d").timestamp()
+                        if (current_time - file_date) <= (max_age_days * 86400):  # 86400초 = 1일
+                            f.write(line + "\n")  # 줄바꿈 추가
+                    except ValueError:
+                        print(f"형식 오류: '{line}'는 올바른 형식이 아닙니다.")
+                    except Exception as e:
+                        print(f"오류 발생: {e}")
 
 # 프로그램 시작 시 호출
 clean_processed_files()
