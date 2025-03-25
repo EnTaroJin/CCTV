@@ -30,9 +30,10 @@ def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 �
                 line = line.strip()
                 if line:  # 빈 줄 확인
                     try:
-                        # 파일 이름과 날짜를 추출하여 비교
-                        file_name, date_str = line.split(",")  # 예: file.mp4,20230101
-                        file_date = datetime.datetime.strptime(date_str, "%Y%m%d").timestamp()
+                        # 파일 이름과 날짜, 시간을 추출하여 비교
+                        file_name, date_str, time_str = line.split(",")  # 예: file.mp4,20230101,10:37:02
+                        datetime_str = f"{date_str} {time_str}"  # 날짜와 시간을 합침
+                        file_date = datetime.datetime.strptime(datetime_str, "%Y%m%d %H:%M:%S").timestamp()
                         if (current_time - file_date) <= (max_age_days * 86400):  # 86400초 = 1일
                             f.write(line + "\n")  # 줄바꿈 추가
                     except ValueError:
@@ -42,6 +43,7 @@ def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 �
 
 # 프로그램 시작 시 호출
 clean_processed_files()
+
 
 
 def reconnect(cap, url):
