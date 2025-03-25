@@ -220,10 +220,11 @@ def delete_old_folders(base_folder, days_to_keep=3):
     
 
 def record_processed_file(file_name):
-    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    current_date = datetime.datetime.now().strftime("%Y%m%d")  # 날짜만 기록
     absolute_path = os.path.abspath(file_name)  # 절대 경로로 변환
+    current_time = datetime.datetime.now().strftime("%H:%M:%S")  # 시간만 기록
     with open("processed_files.txt", "a") as f:
-        f.write(f"{absolute_path},{current_date}\n")  # 날짜도 함께 기록
+        f.write(f"{absolute_path},{current_date},{current_time}\n")  # 날짜와 시간을 함께 기록
 
 
 def load_processed_files():
@@ -231,12 +232,14 @@ def load_processed_files():
     try:
         with open("processed_files.txt", "r") as f:
             for line in f:
-                # 절대 경로로 변환하여 저장
-                file_name = line.strip().split(",")[0]  # 파일 이름만 추출
-                processed_files.add(os.path.abspath(file_name))  # 절대 경로로 변환하여 저장
+                parts = line.strip().split(",")
+                if len(parts) >= 2:
+                    file_name = parts[0]  # 파일 이름
+                    processed_files.add(os.path.abspath(file_name))  # 절대 경로로 변환하여 저장
     except FileNotFoundError:
         pass
     return processed_files
+
 
 
 def process_videos_in_folder(folder_path, model, counter, classes_to_count):
