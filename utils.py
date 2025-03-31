@@ -18,6 +18,19 @@ camera_number = 1
 # 비디오 저장 중지 신호를 위한 플래그
 stop_flag = False
 
+def is_video_file_stable(filepath, check_interval=1.0, checks=3):
+    """파일 크기를 여러 번 측정해서 일정 시간 동안 변화 없으면 안정된 파일로 간주"""
+    try:
+        previous_size = os.path.getsize(filepath)
+        for _ in range(checks):
+            time.sleep(check_interval)
+            current_size = os.path.getsize(filepath)
+            if current_size != previous_size:
+                return False
+            previous_size = current_size
+        return True
+    except Exception:
+        return False
 
 def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 설정
     if os.path.exists("processed_files.txt"):
@@ -69,19 +82,19 @@ def zoom_in(image, zoom_factor=1.0):
     return zoomed_image
 
 
-def preprocess_image(image):
-        # 히스토그램 평활화
-    yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-    yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
-    image = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+# def preprocess_image(image):
+#         # 히스토그램 평활화
+#     yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+#     yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
+#     image = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
     
-    # 감마 보정
-    gamma = 1.5
-    invGamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
-    image = cv2.LUT(image, table)
+#     # 감마 보정
+#     gamma = 1.5
+#     invGamma = 1.0 / gamma
+#     table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+#     image = cv2.LUT(image, table)
     
-    return image
+#     return image
 
 
 def empty_trash():
@@ -95,7 +108,7 @@ def empty_trash():
         shutil.rmtree(trash_dir, ignore_errors=True)
 
 
-def save_capture(image, obj_type, direction, previous_count, current_count, model, counter, classes_to_count):
+def save_capture(image, obj_type, direction, previous_count, current_count, model, counter, classes_to_count, results=None):
     if current_count != previous_count:
         print(f"{obj_type} {direction} 값이 변경되었습니다. 이전 값: {previous_count}, 현재 값: {current_count}")
 
@@ -103,7 +116,6 @@ def save_capture(image, obj_type, direction, previous_count, current_count, mode
         current_hour = datetime.datetime.now().strftime("%H")
         current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_path = os.path.join("captures", current_date, current_hour, obj_type)
-
         os.makedirs(folder_path, exist_ok=True)
 
         base_image_name = os.path.join(folder_path, f"{current_time}.jpg")
@@ -113,37 +125,45 @@ def save_capture(image, obj_type, direction, previous_count, current_count, mode
             image_name = f"{base_image_name}_{index}.jpg"
             index += 1
 
-        tracks = model.track(image, persist=True, show=False, classes=classes_to_count)
-        result_image = counter.start_counting(image, tracks)
+        # ✅ YOLO 결과 재사용
+        if results is not None:
+            result_image = counter.start_counting(image, results)
+        else:
+            tracks = model.track(image, persist=True, show=False, classes=classes_to_count)
+            result_image = counter.start_counting(image, tracks)
 
         cv2.imwrite(image_name, result_image)
         print(f"캡처 저장: {image_name}")
 
 
-def save_capture2(image, obj_type, model, counter, classes_to_count):
-        global camera_number
-        
-        current_date = datetime.datetime.now().strftime("%Y%m%d")
-        current_hour = datetime.datetime.now().strftime("%H")
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_path = os.path.join(f"captures_0{camera_number}", current_date, current_hour, obj_type)
 
-        os.makedirs(folder_path, exist_ok=True)
+def save_capture2(image, obj_type, model, counter, classes_to_count, results=None):
+    global camera_number
 
-        base_image_name = os.path.join(folder_path, f"{current_time}.jpg")
-        image_name = base_image_name
-        index = 1
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    current_hour = datetime.datetime.now().strftime("%H")
+    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_path = os.path.join(f"captures_0{camera_number}", current_date, current_hour, obj_type)
+    os.makedirs(folder_path, exist_ok=True)
 
-        while os.path.exists(image_name):
-            image_name = f"{base_image_name}_{index}.jpg"
-            index += 1
+    base_image_name = os.path.join(folder_path, f"{current_time}.jpg")
+    image_name = base_image_name
+    index = 1
+    while os.path.exists(image_name):
+        image_name = f"{base_image_name}_{index}.jpg"
+        index += 1
 
+    # ✅ YOLO 결과 재사용
+    if results is not None:
+        result_image = counter.start_counting(image, results)
+    else:
         tracks = model.track(image, persist=True, show=False, classes=classes_to_count)
         result_image = counter.start_counting(image, tracks)
 
-        cv2.imwrite(image_name, result_image)
-        print(f"캡처 저장: {image_name}")
-        server_api.file_upload( "CT00010", image_name)
+    cv2.imwrite(image_name, result_image)
+    print(f"캡처 저장: {image_name}")
+    server_api.file_upload("CT00010", image_name)
+
 
 
 def stop_saving_video():
@@ -151,33 +171,39 @@ def stop_saving_video():
     stop_flag = True
 
 
-def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264', zoom_factor=1.0, c_number=2):
+def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='mp4v', zoom_factor=1.0, c_number=2):
     global stop_flag
     global camera_number
     camera_number = c_number
-    frame_skip = 2
+    frame_skip = 1
 
     cap = cv2.VideoCapture(url)
-    assert cap.isOpened(), "비디오 파일을 읽을 수 없습니다."
+    assert cap.isOpened(), "비디오 스트림에 연결할 수 없습니다."
 
     while cap.isOpened():
+        # 폴더 및 파일 경로 설정
         current_date = datetime.datetime.now().strftime("%Y%m%d")
         current_time_folder = datetime.datetime.now().strftime("%H")
         current_time_video = datetime.datetime.now().strftime("%H%M%S")
         output_folder = os.path.join(base_output_folder, current_date, current_time_folder)
         os.makedirs(output_folder, exist_ok=True)
 
-        fourcc = cv2.VideoWriter_fourcc(*fourcc_str)
+        # FPS 확인 및 보정
         fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0 or fps > 60:
+            print("[경고] FPS 값 비정상. 기본값 15.0 사용")
+            fps = 15.0
+
+        # 해상도 및 코덱 설정
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
+        fourcc = cv2.VideoWriter_fourcc(*fourcc_str)
         video_filename = os.path.join(output_folder, f"video_{current_time_video}.mp4")
-        video_writer = cv2.VideoWriter(video_filename, fourcc, fps, (frame_width, frame_height))  # FPS 수정
+        video_writer = cv2.VideoWriter(video_filename, fourcc, fps, (frame_width, frame_height))
 
         start_time = time.time()
-
         frame_counter = 0
+        frames_written = 0  # ✅ 실제 저장된 프레임 수 체크용
 
         while time.time() - start_time < duration:
             if stop_flag:
@@ -193,18 +219,25 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='X264
                     time.sleep(2)
                     continue
 
-            # frame = zoom_in(frame, zoom_factor)
-            if frame_counter % frame_skip == 1:
+            # frame = zoom_in(frame, zoom_factor)  # 줌 기능 필요 시 활성화
+            if frame_counter % frame_skip == 0:
                 video_writer.write(frame)
+                frames_written += 1  # ✅ 프레임 저장 수 증가
 
             frame_counter += 1
 
         video_writer.release()
 
+        # ✅ 프레임이 하나도 저장되지 않았으면 파일 삭제
+        if frames_written == 0 and os.path.exists(video_filename):
+            print(f"[경고] 저장된 프레임이 없습니다. 손상된 파일을 삭제합니다: {video_filename}")
+            os.remove(video_filename)
+
         if stop_flag:
             break
 
     cap.release()
+
 
 
 def delete_old_folders(base_folder, days_to_keep=3):
@@ -243,31 +276,6 @@ def load_processed_files():
     return processed_files
 
 
-
-def process_videos_in_folder(folder_path, model, counter, classes_to_count):
-    global processed_files
-    processed_all = True
-
-    # 이미 처리된 파일 목록 로드
-    processed_files = load_processed_files()
-    
-    video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
-    video_files.sort(key=lambda x: os.path.splitext(os.path.basename(x))[0])  # 파일 이름 기준 정렬
-
-    for video_file in video_files:
-        if os.path.abspath(video_file) in processed_files:  # 절대 경로로 비교
-            continue  # 이미 처리된 파일은 건너뜁니다
-        print(f"Processing video file: {video_file}")  # 파일 이름을 출력하여 확인
-        try:
-            process_video(video_file, model, counter, classes_to_count)
-            record_processed_file(video_file)  # 처리된 파일 기록
-        except Exception as e:
-            print(f"비디오 처리 중 오류 발생: {e}")
-        processed_all = False  # 아직 처리할 파일이 남아 있음
-    
-    return processed_all  # 모든 파일을 처리했는지 여부를 반환
-
-
 def process_video_files(base_folder, model, counter, classes_to_count):
     while True:
         current_time = datetime.datetime.now()
@@ -301,7 +309,7 @@ def process_video_files(base_folder, model, counter, classes_to_count):
 
 def process_video(video_file, model, counter, classes_to_count, retry_delay=10, max_retries=90):
     retries = 0
-    global tracked_objects # 전역 변수 사용
+    global tracked_objects
     global camera_number
 
     while retries < max_retries:
@@ -313,19 +321,19 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                 time.sleep(retry_delay)
                 continue
 
-            frame_skip = 2 # 프레임 스킵 최적화
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            delay = 1
+            frame_skip = 4
             frame_counter = 0
 
             while cap.isOpened():
                 success, im0 = cap.read()
                 if not success:
                     print("프레임을 읽는 데 실패했습니다.")
-                    break  # 프레임을 읽지 못했을 경우 루프를 종료하고 다음 비디오로 넘어갑니다.
+                    break
 
                 try:
-                    # 이미지 전처리 적용
-                    im0 = preprocess_image(im0)
-                    if frame_counter % frame_skip == 1:
+                    if frame_counter % frame_skip == 0:
                         results = model.track(im0, persist=True, show=False, classes=classes_to_count)
                         im0 = counter.start_counting(im0, results)
                         boxes = results[0].boxes
@@ -338,58 +346,94 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
                             if obj_id is not None:
                                 if cls_id in classes_to_count and obj_id not in tracked_objects:
                                     print(f"{obj_type} 감지됨, ID: {obj_id}")
-                                    save_capture2(im0, obj_type, model, counter, classes_to_count)
+                                    save_capture2(im0, obj_type, model, counter, classes_to_count, results)
                                     tracked_objects.add(obj_id)
 
-                        display_size = (800, 600) # 화면 크기 조절
-                        resized_im0 = cv2.resize(im0, display_size)
-                        cv2.imshow(f'CCTV_0{camera_number}', resized_im0) # 화면에 표시
+                        resized_im0 = cv2.resize(im0, (800, 600))
+                        cv2.imshow(f'CCTV_0{camera_number}', resized_im0)
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            print("사용자 종료 요청. 프로그램을 종료합니다.")
+                            break
 
                     frame_counter += 1
 
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        print("사용자 종료 요청. 프로그램을 종료합니다.")
-                        break
                 except Exception as e:
                     print(f"프레임 처리 중 오류 발생: {e}")
-                    break  # 프레임 처리 중 오류가 발생하면 루프를 종료하고 다음 비디오로 넘어갑니다.
+                    break
 
             cap.release()
             cv2.destroyAllWindows()
             print("비디오 파일 처리가 완료되었습니다.")
             return
+
         except Exception as e:
             print(f"비디오 파일 처리 중 오류 발생: {e}")
             retries += 1
             time.sleep(retry_delay)
 
-    # 비디오 파일을 삭제하고 다음으로 넘어가기
     if os.path.exists(video_file):
-        print(f"비디오 파일을 {max_retries}회 시도 후에도 읽을 수 없습니다. 파일을 삭제합니다: {video_file}")
+        print(f"{max_retries}회 재시도 실패. 파일 삭제: {video_file}")
         os.remove(video_file)
-    else:
-        print(f"파일이 이미 삭제되었습니다: {video_file}")
 
-    return
 
-def process_videos_in_folder(folder_path, model, counter, classes_to_count):
+def process_videos_in_folder(folder_path, model, counter, classes_to_count, check_interval=30):
     global processed_files
     processed_all = True
-
     processed_files = load_processed_files()
-    
-    video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
-    video_files.sort(key=lambda x: os.path.splitext(os.path.basename(x))[0])  # 파일 이름 기준 정렬
 
-    for video_file in video_files:
-        if os.path.abspath(video_file) in processed_files:
-            continue  # 이미 처리된 파일은 건너뜁니다
-        print(f"Processing video file: {video_file}")  # 파일 이름을 출력하여 확인
-        try:
-            process_video(video_file, model, counter, classes_to_count)
-            record_processed_file(video_file)  # 처리된 파일 기록
-        except Exception as e:
-            print(f"비디오 처리 중 오류 발생: {e}")
-        processed_all = False  # 아직 처리할 파일이 남아 있음
-    
-    return processed_all  # 모든 파일을 처리했는지 여부를 반환
+    wait_start_times = {}  # 파일별 대기 시작 시각
+    total_wait_start = None  # 전체 대기 시작 시각
+
+    while True:
+        video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
+        video_files.sort(key=lambda x: os.path.splitext(os.path.basename(x))[0])
+
+        any_file_processed = False
+        current_time = time.time()
+
+        for video_file in video_files:
+            abs_path = os.path.abspath(video_file)
+
+            if abs_path in processed_files:
+                continue
+
+            # 안정성 확인 (파일 크기 변화 확인)
+            if not is_video_file_stable(video_file):
+                if abs_path not in wait_start_times:
+                    wait_start_times[abs_path] = current_time
+                continue
+
+            # 파일이 열리지 않는 경우 (손상 가능성 or 생성 중)
+            cap = cv2.VideoCapture(video_file)
+            if not cap.isOpened():
+                print(f"[건너뜀] 파일을 열 수 없습니다 (아직 생성 중이거나 손상됨): {video_file}")
+                cap.release()
+                continue  # 다음 파일로 건너뜀
+            cap.release()
+
+            print(f"Processing video file: {video_file}")
+            try:
+                process_video(video_file, model, counter, classes_to_count)
+                record_processed_file(video_file)
+                any_file_processed = True
+                wait_start_times.pop(abs_path, None)
+            except Exception as e:
+                print(f"비디오 처리 중 오류 발생: {e}")
+
+        # 처리된 파일이 하나도 없을 때 → 누적 대기
+        if not any_file_processed:
+            if total_wait_start is None:
+                total_wait_start = time.time()
+
+            waited_total_sec = int(time.time() - total_wait_start)
+            minutes, seconds = divmod(waited_total_sec, 60)
+
+            print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기 시간: {minutes}분 {seconds}초")
+            time.sleep(check_interval)
+            continue  # 다음 루프로
+
+        total_wait_start = None
+        processed_all = False
+        break  # 한 번이라도 처리했으면 상위 루프 재호출
+
+    return processed_all
