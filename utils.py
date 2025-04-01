@@ -32,33 +32,6 @@ def is_video_file_stable(filepath, check_interval=1.0, checks=3):
     except Exception:
         return False
 
-def clean_processed_files(max_age_days=7):  # 최대 보관 기간을 7일로 설정
-    if os.path.exists("processed_files.txt"):
-        current_time = time.time()
-        with open("processed_files.txt", "r") as f:
-            lines = f.readlines()
-        
-        with open("processed_files.txt", "w") as f:
-            for line in lines:
-                line = line.strip()
-                if line:  # 빈 줄 확인
-                    try:
-                        # 파일 이름과 날짜, 시간을 추출하여 비교
-                        file_name, date_str, time_str = line.split(",")  # 예: file.mp4,20230101,10:37:02
-                        datetime_str = f"{date_str} {time_str}"  # 날짜와 시간을 합침
-                        file_date = datetime.datetime.strptime(datetime_str, "%Y%m%d %H:%M:%S").timestamp()
-                        if (current_time - file_date) <= (max_age_days * 86400):  # 86400초 = 1일
-                            f.write(line + "\n")  # 줄바꿈 추가
-                    except ValueError:
-                        print(f"형식 오류: '{line}'는 올바른 형식이 아닙니다.")
-                    except Exception as e:
-                        print(f"오류 발생: {e}")
-
-# 프로그램 시작 시 호출
-clean_processed_files()
-
-
-
 def reconnect(cap, url):
     cap.release()
     cap = cv2.VideoCapture(url)
@@ -255,25 +228,34 @@ def delete_old_folders(base_folder, days_to_keep=3):
     
 
 def record_processed_file(file_name):
-    current_date = datetime.datetime.now().strftime("%Y%m%d")  # 날짜만 기록
-    absolute_path = os.path.abspath(file_name)  # 절대 경로로 변환
-    current_time = datetime.datetime.now().strftime("%H:%M:%S")  # 시간만 기록
-    with open("processed_files.txt", "a") as f:
-        f.write(f"{absolute_path},{current_date},{current_time}\n")  # 날짜와 시간을 함께 기록
+    current_date = datetime.datetime.now().strftime("%Y%m%d")  # 날짜 형식
+    absolute_path = os.path.abspath(file_name)
+    current_time = datetime.datetime.now().strftime("%H:%M:%S")
+
+    # 날짜별 로그 폴더 생성
+    log_folder = os.path.join("영상 처리 로그", current_date)
+    os.makedirs(log_folder, exist_ok=True)
+    log_path = os.path.join(log_folder, "processed_files.txt")
+
+    with open(log_path, "a") as f:
+        f.write(f"{absolute_path},{current_date},{current_time}\n")
 
 
 def load_processed_files():
     processed_files = set()
-    try:
-        with open("processed_files.txt", "r") as f:
+    current_date = datetime.datetime.now().strftime("%Y%m%d")
+    log_path = os.path.join("영상 처리 로그", current_date, "processed_files.txt")
+
+    if os.path.exists(log_path):
+        with open(log_path, "r") as f:
             for line in f:
                 parts = line.strip().split(",")
-                if len(parts) >= 2:
-                    file_name = parts[0]  # 파일 이름
-                    processed_files.add(os.path.abspath(file_name))  # 절대 경로로 변환하여 저장
-    except FileNotFoundError:
-        pass
+                if len(parts) >= 1:
+                    file_name = parts[0]
+                    processed_files.add(os.path.abspath(file_name))
+
     return processed_files
+
 
 
 def process_video_files(base_folder, model, counter, classes_to_count):
@@ -287,11 +269,10 @@ def process_video_files(base_folder, model, counter, classes_to_count):
             current_date = current_time.strftime("%Y%m%d")
 
             # 현재시간부터 17시까지의 폴더를 처리
-            for hour in range(current_hour, 18):  # 현재 시간부터 17시까지 
+            for hour in range(current_hour, 18):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
-                    while not process_videos_in_folder(hour_folder, model, counter, classes_to_count):
-                        time.sleep(1)  # 현재 시간 폴더의 모든 비디오를 처리한 후 잠시 대기 (1초)
+                    process_videos_in_folder(hour_folder, model, counter, classes_to_count)
 
             # 다음 날로 넘어감
             current_date = (current_time + datetime.timedelta(days=1)).strftime("%Y%m%d")
