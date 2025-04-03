@@ -259,33 +259,40 @@ def load_processed_files():
 
 
 def process_video_files(base_folder, model, counter, classes_to_count):
+    global processed_files
+    processed_files.update(load_processed_files())  # 오늘 날짜 기준 처리된 파일 불러오기
+
     while True:
         current_time = datetime.datetime.now()
         current_hour = current_time.hour
+        current_date = current_time.strftime("%Y%m%d")
 
-        # 현재 시간이 5시 이상이면 비디오 파일 처리
         if 5 <= current_hour < 17:
-            delete_old_folders(base_folder)  # 오래된 폴더 삭제
-            current_date = current_time.strftime("%Y%m%d")
+            print(f"\n✅ [{current_time.strftime('%H:%M:%S')}] 영상 처리 시작 (현재 시각: {current_hour}시)")
+            delete_old_folders(base_folder)
 
-            # 현재시간부터 17시까지의 폴더를 처리
+            # ✅ 1단계: 최신 시간대(현재 시각 기준)부터 앞으로 처리
             for hour in range(current_hour, 18):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
+                    print(f"\n[최신 우선 처리] {hour}시 폴더 처리 시도")
                     process_videos_in_folder(hour_folder, model, counter, classes_to_count)
 
-            # 다음 날로 넘어감
-            current_date = (current_time + datetime.timedelta(days=1)).strftime("%Y%m%d")
-            for hour in range(0, 5):  # 다음 날 0시부터 5시까지 대기
+            # ✅ 2단계: 과거 시간대 중 아직 누락된 시간대 보충 처리
+            for hour in range(5, current_hour):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
-                    while not process_videos_in_folder(hour_folder, model, counter, classes_to_count):
-                        time.sleep(1)  # 현재 시간 폴더의 모든 비디오를 처리한 후 잠시 대기 (1초)
-    
+                    print(f"\n[과거 보충 처리] {hour}시 폴더 처리 시도")
+                    process_videos_in_folder(hour_folder, model, counter, classes_to_count)
+
         else:
-            print("현재 시간은 5시부터 17시가 아닙니다. 대기 중...") 
-            time.sleep(3600)  # 1시간 대기
-            continue
+            if 4 <= current_hour < 5:
+                print(f"🕓 [{current_time.strftime('%H:%M:%S')}] 04시대입니다. 5분 후 다시 확인합니다...")
+                time.sleep(300)
+            else:
+                print(f"🌙 [{current_time.strftime('%H:%M:%S')}] 영상 처리 시간 아님 (5~17시만 처리). 1시간 대기...")
+                time.sleep(3600)
+
 
 
 def process_video(video_file, model, counter, classes_to_count, retry_delay=10, max_retries=90):
@@ -360,10 +367,11 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
 def process_videos_in_folder(folder_path, model, counter, classes_to_count, check_interval=30):
     global processed_files
     processed_all = True
-    processed_files = load_processed_files()
 
-    wait_start_times = {}  # 파일별 대기 시작 시각
-    total_wait_start = None  # 전체 대기 시작 시각
+    wait_start_times = {}       # 파일별 대기 시작 시각
+    total_wait_start = None     # 전체 대기 시작 시각
+    file_skip_counts = {}       # 파일별 실패 횟수 저장
+    file_fail_phases = {}       # 파일별 시도 단계: first → retry
 
     while True:
         video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
@@ -378,30 +386,52 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             if abs_path in processed_files:
                 continue
 
-            # 안정성 확인 (파일 크기 변화 확인)
+            # 안정성 확인
             if not is_video_file_stable(video_file):
                 if abs_path not in wait_start_times:
                     wait_start_times[abs_path] = current_time
                 continue
 
-            # 파일이 열리지 않는 경우 (손상 가능성 or 생성 중)
+            # 파일 열기 시도
             cap = cv2.VideoCapture(video_file)
             if not cap.isOpened():
-                print(f"[건너뜀] 파일을 열 수 없습니다 (아직 생성 중이거나 손상됨): {video_file}")
+                file_skip_counts[abs_path] = file_skip_counts.get(abs_path, 0) + 1
+                print(f"[건너뜀 {file_skip_counts[abs_path]}회] 열 수 없음 (생성 중이거나 손상): {video_file}")
                 cap.release()
-                continue  # 다음 파일로 건너뜀
+
+                if file_skip_counts[abs_path] >= 3:
+                    phase = file_fail_phases.get(abs_path, "first")
+
+                    if phase == "first":
+                        print(f"[보류] {video_file} 첫 시도 실패 3회. 다음 라운드에서 다시 시도 예정.")
+                        file_skip_counts[abs_path] = 0  # 횟수 초기화
+                        file_fail_phases[abs_path] = "retry"
+                    elif phase == "retry":
+                        print(f"[영구 제외] {video_file} 두 번째 시도까지 실패. 제외하고 기록합니다.")
+                        processed_files.add(abs_path)
+                        record_processed_file(video_file)
+                        file_skip_counts.pop(abs_path, None)
+                        file_fail_phases.pop(abs_path, None)
+
+                continue  # 다음 파일로
+
             cap.release()
 
             print(f"Processing video file: {video_file}")
             try:
                 process_video(video_file, model, counter, classes_to_count)
                 record_processed_file(video_file)
+                processed_files.add(abs_path)
                 any_file_processed = True
+
+                # 성공 시 관련 정보 초기화
                 wait_start_times.pop(abs_path, None)
+                file_skip_counts.pop(abs_path, None)
+                file_fail_phases.pop(abs_path, None)
             except Exception as e:
                 print(f"비디오 처리 중 오류 발생: {e}")
 
-        # 처리된 파일이 하나도 없을 때 → 누적 대기
+        # 처리된 파일이 하나도 없을 때 → 대기
         if not any_file_processed:
             if total_wait_start is None:
                 total_wait_start = time.time()
@@ -409,12 +439,13 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             waited_total_sec = int(time.time() - total_wait_start)
             minutes, seconds = divmod(waited_total_sec, 60)
 
-            print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기 시간: {minutes}분 {seconds}초")
+            print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기: {minutes}분 {seconds}초")
             time.sleep(check_interval)
-            continue  # 다음 루프로
+            continue
 
+        # 파일 하나라도 처리했으면 다시 루프 반복
         total_wait_start = None
         processed_all = False
-        break  # 한 번이라도 처리했으면 상위 루프 재호출
+        continue
 
     return processed_all
