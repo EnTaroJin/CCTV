@@ -368,10 +368,10 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
     global processed_files
     processed_all = True
 
-    wait_start_times = {}       # 파일별 대기 시작 시각
-    total_wait_start = None     # 전체 대기 시작 시각
-    file_skip_counts = {}       # 파일별 실패 횟수 저장
-    file_fail_phases = {}       # 파일별 시도 단계: first → retry
+    wait_start_times = {}
+    total_wait_start = None
+    file_skip_counts = {}
+    file_fail_phases = {}
 
     while True:
         video_files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.mp4')]
@@ -386,34 +386,31 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             if abs_path in processed_files:
                 continue
 
-            # 안정성 확인
             if not is_video_file_stable(video_file):
                 if abs_path not in wait_start_times:
                     wait_start_times[abs_path] = current_time
                 continue
 
-            # 파일 열기 시도
             cap = cv2.VideoCapture(video_file)
             if not cap.isOpened():
                 file_skip_counts[abs_path] = file_skip_counts.get(abs_path, 0) + 1
-                print(f"[건너뜀 {file_skip_counts[abs_path]}회] 열 수 없음 (생성 중이거나 손상): {video_file}")
+                print(f"[건너뜀 {file_skip_counts[abs_path]}회] 열 수 없음: {video_file}")
                 cap.release()
 
                 if file_skip_counts[abs_path] >= 3:
                     phase = file_fail_phases.get(abs_path, "first")
-
                     if phase == "first":
-                        print(f"[보류] {video_file} 첫 시도 실패 3회. 다음 라운드에서 다시 시도 예정.")
-                        file_skip_counts[abs_path] = 0  # 횟수 초기화
+                        print(f"[보류] 첫 시도 실패 3회. 다음 라운드 재시도 예정: {video_file}")
+                        file_skip_counts[abs_path] = 0
                         file_fail_phases[abs_path] = "retry"
                     elif phase == "retry":
-                        print(f"[영구 제외] {video_file} 두 번째 시도까지 실패. 제외하고 기록합니다.")
+                        print(f"[영구 제외] 두 번째 시도도 실패. 제외: {video_file}")
                         processed_files.add(abs_path)
                         record_processed_file(video_file)
                         file_skip_counts.pop(abs_path, None)
                         file_fail_phases.pop(abs_path, None)
 
-                continue  # 다음 파일로
+                continue
 
             cap.release()
 
@@ -424,14 +421,20 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
                 processed_files.add(abs_path)
                 any_file_processed = True
 
-                # 성공 시 관련 정보 초기화
                 wait_start_times.pop(abs_path, None)
                 file_skip_counts.pop(abs_path, None)
                 file_fail_phases.pop(abs_path, None)
             except Exception as e:
                 print(f"비디오 처리 중 오류 발생: {e}")
 
-        # 처리된 파일이 하나도 없을 때 → 대기
+        # ✅ 처리 가능한 영상은 없고, 안정되지 않은 파일이 있는지 확인
+        has_unstable_file = any(
+            not is_video_file_stable(os.path.join(folder_path, f))
+            for f in os.listdir(folder_path)
+            if f.endswith('.mp4') and os.path.abspath(os.path.join(folder_path, f)) not in processed_files
+        )
+
+        # ✅ 처리된 파일이 하나도 없을 때 → 대기 또는 종료
         if not any_file_processed:
             if total_wait_start is None:
                 total_wait_start = time.time()
@@ -440,10 +443,15 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             minutes, seconds = divmod(waited_total_sec, 60)
 
             print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기: {minutes}분 {seconds}초")
+
+            # ✅ 안정되지 않은 파일도 없고, 2분 초과 → 폴더 처리 종료
+            if waited_total_sec >= 120 and not has_unstable_file:
+                print(f"❌ 2분 초과 + 안정된 파일 없음 → 이 폴더 종료: {folder_path}")
+                break
+
             time.sleep(check_interval)
             continue
 
-        # 파일 하나라도 처리했으면 다시 루프 반복
         total_wait_start = None
         processed_all = False
         continue
