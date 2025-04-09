@@ -98,7 +98,7 @@ def save_capture(image, obj_type, direction, previous_count, current_count, mode
             image_name = f"{base_image_name}_{index}.jpg"
             index += 1
 
-        # ✅ YOLO 결과 재사용
+        # YOLO 결과 재사용
         if results is not None:
             result_image = counter.start_counting(image, results)
         else:
@@ -126,7 +126,7 @@ def save_capture2(image, obj_type, model, counter, classes_to_count, results=Non
         image_name = f"{base_image_name}_{index}.jpg"
         index += 1
 
-    # ✅ YOLO 결과 재사용
+    # YOLO 결과 재사용
     if results is not None:
         result_image = counter.start_counting(image, results)
     else:
@@ -176,7 +176,7 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='mp4v
 
         start_time = time.time()
         frame_counter = 0
-        frames_written = 0  # ✅ 실제 저장된 프레임 수 체크용
+        frames_written = 0  # 실제 저장된 프레임 수 체크용
 
         while time.time() - start_time < duration:
             if stop_flag:
@@ -195,13 +195,13 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='mp4v
             # frame = zoom_in(frame, zoom_factor)  # 줌 기능 필요 시 활성화
             if frame_counter % frame_skip == 0:
                 video_writer.write(frame)
-                frames_written += 1  # ✅ 프레임 저장 수 증가
+                frames_written += 1  # 프레임 저장 수 증가
 
             frame_counter += 1
 
         video_writer.release()
 
-        # ✅ 프레임이 하나도 저장되지 않았으면 파일 삭제
+        # 프레임이 하나도 저장되지 않았으면 파일 삭제
         if frames_written == 0 and os.path.exists(video_filename):
             print(f"[경고] 저장된 프레임이 없습니다. 손상된 파일을 삭제합니다: {video_filename}")
             os.remove(video_filename)
@@ -271,14 +271,14 @@ def process_video_files(base_folder, model, counter, classes_to_count):
             print(f"\n✅ [{current_time.strftime('%H:%M:%S')}] 영상 처리 시작 (현재 시각: {current_hour}시)")
             delete_old_folders(base_folder)
 
-            # ✅ 1단계: 최신 시간대(현재 시각 기준)부터 앞으로 처리
+            # 1단계: 최신 시간대(현재 시각 기준)부터 앞으로 처리
             for hour in range(current_hour, 18):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
                     print(f"\n[최신 우선 처리] {hour}시 폴더 처리 시도")
                     process_videos_in_folder(hour_folder, model, counter, classes_to_count)
 
-            # ✅ 2단계: 과거 시간대 중 아직 누락된 시간대 보충 처리
+            # 2단계: 과거 시간대 중 아직 누락된 시간대 보충 처리
             for hour in range(5, current_hour):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
@@ -287,8 +287,8 @@ def process_video_files(base_folder, model, counter, classes_to_count):
 
         else:
             if 4 <= current_hour < 5:
-                print(f"🕓 [{current_time.strftime('%H:%M:%S')}] 04시대입니다. 5분 후 다시 확인합니다...")
-                time.sleep(300)
+                print(f"🕓 [{current_time.strftime('%H:%M:%S')}] 04시대입니다. 2분 후 다시 확인합니다...")
+                time.sleep(120)
             else:
                 print(f"🌙 [{current_time.strftime('%H:%M:%S')}] 영상 처리 시간 아님 (5~17시만 처리). 1시간 대기...")
                 time.sleep(3600)
@@ -427,14 +427,14 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             except Exception as e:
                 print(f"비디오 처리 중 오류 발생: {e}")
 
-        # ✅ 처리 가능한 영상은 없고, 안정되지 않은 파일이 있는지 확인
+        # 처리 가능한 영상은 없고, 안정되지 않은 파일이 있는지 확인
         has_unstable_file = any(
             not is_video_file_stable(os.path.join(folder_path, f))
             for f in os.listdir(folder_path)
             if f.endswith('.mp4') and os.path.abspath(os.path.join(folder_path, f)) not in processed_files
         )
 
-        # ✅ 처리된 파일이 하나도 없을 때 → 대기 또는 종료
+        # 처리된 파일이 하나도 없을 때 → 대기 또는 종료
         if not any_file_processed:
             if total_wait_start is None:
                 total_wait_start = time.time()
@@ -444,7 +444,7 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
 
             print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기: {minutes}분 {seconds}초")
 
-            # ✅ 안정되지 않은 파일도 없고, 2분 초과 → 폴더 처리 종료
+            # 안정되지 않은 파일도 없고, 2분 초과 → 폴더 처리 종료
             if waited_total_sec >= 120 and not has_unstable_file:
                 print(f"❌ 2분 초과 + 안정된 파일 없음 → 이 폴더 종료: {folder_path}")
                 break
