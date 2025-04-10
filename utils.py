@@ -257,10 +257,11 @@ def load_processed_files():
     return processed_files
 
 
-
 def process_video_files(base_folder, model, counter, classes_to_count):
     global processed_files
     processed_files.update(load_processed_files())  # 오늘 날짜 기준 처리된 파일 불러오기
+
+    program_start_time = time.time()  # 프로그램 시작 시각 기록
 
     while True:
         current_time = datetime.datetime.now()
@@ -276,14 +277,14 @@ def process_video_files(base_folder, model, counter, classes_to_count):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
                     print(f"\n[최신 우선 처리] {hour}시 폴더 처리 시도")
-                    process_videos_in_folder(hour_folder, model, counter, classes_to_count)
+                    process_videos_in_folder(hour_folder, model, counter, classes_to_count, program_start_time)
 
             # 2단계: 과거 시간대 중 아직 누락된 시간대 보충 처리
             for hour in range(5, current_hour):
                 hour_folder = os.path.join(base_folder, current_date, f"{hour:02}")
                 if os.path.exists(hour_folder):
                     print(f"\n[과거 보충 처리] {hour}시 폴더 처리 시도")
-                    process_videos_in_folder(hour_folder, model, counter, classes_to_count)
+                    process_videos_in_folder(hour_folder, model, counter, classes_to_count, program_start_time)
 
         else:
             if 4 <= current_hour < 5:
@@ -292,7 +293,6 @@ def process_video_files(base_folder, model, counter, classes_to_count):
             else:
                 print(f"🌙 [{current_time.strftime('%H:%M:%S')}] 영상 처리 시간 아님 (5~17시만 처리). 1시간 대기...")
                 time.sleep(3600)
-
 
 
 def process_video(video_file, model, counter, classes_to_count, retry_delay=10, max_retries=90):
@@ -364,7 +364,7 @@ def process_video(video_file, model, counter, classes_to_count, retry_delay=10, 
         os.remove(video_file)
 
 
-def process_videos_in_folder(folder_path, model, counter, classes_to_count, check_interval=30):
+def process_videos_in_folder(folder_path, model, counter, classes_to_count, program_start_time, check_interval=30):
     global processed_files
     processed_all = True
 
@@ -427,26 +427,30 @@ def process_videos_in_folder(folder_path, model, counter, classes_to_count, chec
             except Exception as e:
                 print(f"비디오 처리 중 오류 발생: {e}")
 
-        # 처리 가능한 영상은 없고, 안정되지 않은 파일이 있는지 확인
         has_unstable_file = any(
             not is_video_file_stable(os.path.join(folder_path, f))
             for f in os.listdir(folder_path)
             if f.endswith('.mp4') and os.path.abspath(os.path.join(folder_path, f)) not in processed_files
         )
 
-        # 처리된 파일이 하나도 없을 때 → 대기 또는 종료
         if not any_file_processed:
             if total_wait_start is None:
                 total_wait_start = time.time()
 
             waited_total_sec = int(time.time() - total_wait_start)
             minutes, seconds = divmod(waited_total_sec, 60)
+            runtime = int(time.time() - program_start_time)
 
             print(f"[대기] 처리할 파일이 없습니다. {check_interval}초 후 다시 확인합니다. 누적 대기: {minutes}분 {seconds}초")
 
-            # 안정되지 않은 파일도 없고, 2분 초과 → 폴더 처리 종료
-            if waited_total_sec >= 120 and not has_unstable_file:
-                print(f"❌ 2분 초과 + 안정된 파일 없음 → 이 폴더 종료: {folder_path}")
+            if runtime < 180:
+                # 프로그램 시작 후 3분 이내 → 복구 상황으로 간주 → 최대 2분 대기
+                if waited_total_sec >= 120 and not has_unstable_file:
+                    print(f"❌ (재시작 상황) 2분 초과 + 안정된 파일 없음 → 이 폴더 종료: {folder_path}")
+                    break
+            else:
+                # 실시간 운용 중 → 바로 다음 폴더로 넘어감
+                print(f"✅ (실시간 운용) 안정된 파일 없음 → 이 폴더 종료: {folder_path}")
                 break
 
             time.sleep(check_interval)
