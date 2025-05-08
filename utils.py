@@ -55,19 +55,19 @@ def zoom_in(image, zoom_factor=1.0):
     return zoomed_image
 
 
-# def preprocess_image(image):
-#         # 히스토그램 평활화
-#     yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
-#     yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
-#     image = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+def preprocess_image(image):
+        # 히스토그램 평활화
+    yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+    yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :, 0])
+    image = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
     
-#     # 감마 보정
-#     gamma = 1.5
-#     invGamma = 1.0 / gamma
-#     table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
-#     image = cv2.LUT(image, table)
+    # 감마 보정
+    gamma = 1.5
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    image = cv2.LUT(image, table)
     
-#     return image
+    return image
 
 
 def empty_trash():
@@ -135,8 +135,18 @@ def save_capture2(image, obj_type, model, counter, classes_to_count, results=Non
 
     cv2.imwrite(image_name, result_image)
     print(f"캡처 저장: {image_name}")
-    server_api.file_upload("CT00010", image_name)
 
+    # 카메라 번호에 따라 unitid 지정
+    unit_map = {
+        1: "CT00010",    # B지점
+        2: "CT-04020",   # Q지점
+    }
+    unitid = unit_map.get(camera_number, "UNKNOWN")
+
+    if unitid != "UNKNOWN":
+        server_api.file_upload(unitid, image_name)
+    else:
+        print(f"[오류] 알 수 없는 camera_number: {camera_number}")
 
 
 def stop_saving_video():
@@ -213,7 +223,7 @@ def save_video_in_chunks(url, base_output_folder, duration=180, fourcc_str='mp4v
 
 
 
-def delete_old_folders(base_folder, days_to_keep=3):
+def delete_old_folders(base_folder, days_to_keep=2):
     current_date = datetime.datetime.now()
     threshold_date = current_date - datetime.timedelta(days=days_to_keep)
     
